@@ -1,8 +1,8 @@
 # SOLARA — Vice City of the Sun
 
-[![make.fun](https://make.fun/badge/gta6-01.svg)](https://make.fun/bounty/gta6-01)
-[![rank](https://make.fun/badge/Ybebd2/solara-calm-condor-83/rank.svg)](https://make.fun/bounty/gta6-01)
-[![reward](https://make.fun/badge/Ybebd2/solara-calm-condor-83/reward.svg)](https://make.fun/bounty/gta6-01)
+[![make.fun · gta6-01](https://make.fun/badge/gta6-01.svg)](https://make.fun/bounty/gta6-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
+[![rank](https://make.fun/badge/gta6-01/Ybebd2/solara-calm-condor-83/rank.svg)](https://make.fun/bounty/gta6-01/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
+[![reward](https://make.fun/badge/gta6-01/Ybebd2/solara-calm-condor-83/reward.svg)](https://make.fun/bounty/gta6-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
 
 A GTA-style open-world game built for the **gta6-01** bounty on [make.fun](https://make.fun/bounty/gta6-01): 8 jobs across 7 districts, a full wanted system with police cruisers, officers and a searchlight helicopter, crew abilities, radio stations, 20 Golden Geckos to collect, and a bright Vice-City-inspired sunlit city.
 
