@@ -1,205 +1,172 @@
 // SOLARA — hud.js
-// HUD: cash, rank, mission panel, wanted stars, health/armour bars, ammo,
-// minimap canvas, message line, two-way dialogue box, radio display.
+// HUD: cash, rank, mission panel, wanted stars, health/armour bars,
+// ammo, minimap canvas (player, cars, police, geckos, waypoint),
+// message line, dialogue box with speaker portrait, start screen.
 
-import { MISSIONS, RADIO, WEAPONS } from './config.js';
+import { DISTRICTS, RADIO, WEAPONS } from './config.js';
 
-export function createHUD(S) {
+export function createHud(S, missions, world, vehicles, police) {
   const $ = (id) => document.getElementById(id);
-  const H = {
-    update,
-    showMessage,
-    showDialogue,
-    showMap,
+  const els = {
+    cash: $('hud-cash'),
+    rank: $('hud-rank'),
+    mission: $('hud-mission-title'),
+    missionDist: $('hud-mission-dist'),
+    missionTimer: $('hud-mission-timer'),
+    stars: $('hud-stars'),
+    health: $('hud-health-fill'),
+    armour: $('hud-armour-fill'),
+    ammo: $('hud-ammo'),
+    weapon: $('hud-weapon'),
+    message: $('hud-message'),
+    dialogue: $('hud-dialogue'),
+    dlgSpeaker: $('dlg-speaker'),
+    dlgText: $('dlg-text'),
+    minimap: $('minimap'),
+    geckos: $('hud-geckos'),
+    radio: $('hud-radio'),
+    crew: $('hud-crew'),
+    district: $('hud-district'),
+    startScreen: $('start-screen'),
+    pauseScreen: $('pause-screen'),
+    mapScreen: $('map-screen'),
   };
-  let dialogueTimer = null;
-  let mapVisible = false;
+  const mm = els.minimap ? els.minimap.getContext('2d') : null;
 
-  const minimap = $('minimap');
-  const mctx = minimap ? minimap.getContext('2d') : null;
-
-  function showMessage(text) {
-    S.message = text;
-    S.messageUntil = S.time + 4;
-    const el = $('message');
-    if (el) {
-      el.textContent = text;
-      el.style.opacity = '1';
-    }
+  function starText(n) {
+    let s = '';
+    for (let i = 0; i < 5; i++) s += i < n ? '★' : '☆';
+    return s;
   }
 
-  function showDialogue(speaker, text) {
-    const box = $('dialogue');
-    if (!box) return;
-    const who = $('dialogue-speaker');
-    const body = $('dialogue-text');
-    if (who) who.textContent = speaker;
-    if (body) body.textContent = text;
-    box.style.opacity = '1';
-    S.dialogueUntil = S.time + 5;
-    if (dialogueTimer) clearTimeout(dialogueTimer);
-    dialogueTimer = setTimeout(() => { box.style.opacity = '0'; }, 5000);
-    // Kai replies to the giver after a beat (two-way dialogue)
-    if (speaker !== 'KAI') {
-      const replies = [
-        'Got it. On my way.',
-        'Say less. Consider it done.',
-        'Alright, I will handle it.',
-        'Copy that. Moving now.',
-      ];
-      const reply = replies[Math.floor(Math.random() * replies.length)];
-      setTimeout(() => {
-        if (who) who.textContent = 'KAI';
-        if (body) body.textContent = reply;
-        box.style.opacity = '1';
-        if (dialogueTimer) clearTimeout(dialogueTimer);
-        dialogueTimer = setTimeout(() => { box.style.opacity = '0'; }, 4000);
-      }, 2600);
-    }
-  }
-
-  function showMap(on) {
-    mapVisible = on;
-    const big = $('bigmap');
-    if (big) big.style.display = on ? 'block' : 'none';
-    const mm = $('minimap-wrap');
-    if (mm) mm.style.display = on ? 'none' : 'block';
-  }
-
-  function drawMinimap(ctx, size, big) {
-    const W2 = 640;
-    const scale = size / W2;
-    const ox = size / 2;
-    const oz = size / 2;
-    const X = (x) => ox + x * scale;
-    const Z = (z) => oz + z * scale;
-    ctx.clearRect(0, 0, size, size);
-    // ocean
-    ctx.fillStyle = '#19b5c9';
-    ctx.fillRect(0, 0, X(-300) - X(-320), size);
-    // sand
-    ctx.fillStyle = '#f2ddae';
-    ctx.fillRect(X(-300), 0, X(-268) - X(-300), size);
-    // ground
-    ctx.fillStyle = '#3a4152';
-    ctx.fillRect(X(-268), 0, size - X(-268), size);
-    // roads
-    ctx.strokeStyle = '#565e70';
-    ctx.lineWidth = big ? 5 : 2.5;
-    for (let k = -5; k <= 5; k++) {
-      const c = k * 64;
-      ctx.beginPath(); ctx.moveTo(X(c), 0); ctx.lineTo(X(c), size); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(0, Z(c)); ctx.lineTo(size, Z(c)); ctx.stroke();
-    }
+  function drawMinimap() {
+    if (!mm || !els.minimap) return;
+    const W = els.minimap.width;
+    const H = els.minimap.height;
+    const scale = W / 640;
+    mm.clearRect(0, 0, W, H);
+    mm.fillStyle = 'rgba(10,20,30,0.75)';
+    mm.fillRect(0, 0, W, H);
     // districts
-    const cols = ['#4fc3f7', '#ffb74d', '#ff5252', '#e040fb', '#69f0ae', '#ffd54f', '#fff176'];
-    const pts = [[-210, -210], [-210, 210], [0, 0], [0, -190], [190, -190], [190, 190], [-280, 0]];
-    pts.forEach(([dx, dz], i) => {
-      ctx.fillStyle = cols[i];
-      ctx.globalAlpha = 0.55;
-      ctx.beginPath(); ctx.arc(X(dx), Z(dz), (big ? 26 : 12), 0, Math.PI * 2); ctx.fill();
-      ctx.globalAlpha = 1;
-    });
-    // geckos
-    if (H.geckos) {
-      ctx.fillStyle = '#ffd600';
-      for (const g of H.geckos) {
-        if (g.taken) continue;
-        ctx.beginPath(); ctx.arc(X(g.x), Z(g.z), big ? 4 : 2.5, 0, Math.PI * 2); ctx.fill();
-      }
+    for (const d of DISTRICTS) {
+      mm.fillStyle = d.color;
+      mm.globalAlpha = 0.35;
+      mm.beginPath();
+      mm.arc((d.x + 320) * scale, (d.z + 320) * scale, d.r * scale, 0, Math.PI * 2);
+      mm.fill();
+      mm.globalAlpha = 1;
     }
-    // mission target
-    if (S.missionActive && S.missionIdx < MISSIONS.length) {
-      const m = MISSIONS[S.missionIdx];
-      const t = (m.type === 'finale' && S.missionStage === 1) ? m.stage1Target : m.target;
-      const pulse = 1 + Math.sin(S.time * 5) * 0.3;
-      ctx.fillStyle = '#ffea00';
-      ctx.beginPath(); ctx.arc(X(t[0]), Z(t[1]), (big ? 8 : 5) * pulse, 0, Math.PI * 2); ctx.fill();
-      ctx.strokeStyle = '#ffea00';
-      ctx.beginPath(); ctx.arc(X(t[0]), Z(t[1]), (big ? 14 : 9) * pulse, 0, Math.PI * 2); ctx.stroke();
+    // roads
+    mm.strokeStyle = 'rgba(255,255,255,0.5)';
+    mm.lineWidth = 2;
+    for (let i = -4; i <= 4; i++) {
+      const c = (i * 64 + 320) * scale;
+      mm.beginPath(); mm.moveTo(c, 0); mm.lineTo(c, H); mm.stroke();
+      mm.beginPath(); mm.moveTo(0, c); mm.lineTo(W, c); mm.stroke();
+    }
+    // ocean
+    mm.fillStyle = '#2fd4c8';
+    mm.fillRect(0, 0, 20 * scale, H);
+    // geckos
+    mm.fillStyle = '#ffd700';
+    for (const g of world.geckos) {
+      if (g.taken) continue;
+      mm.beginPath();
+      mm.arc((g.x + 320) * scale, (g.z + 320) * scale, 2.5, 0, Math.PI * 2);
+      mm.fill();
+    }
+    // waypoint / mission target
+    const m = missions.current();
+    if (m) {
+      const t = m.type === 'finale' && S.missionStage === 1 ? [-192, -192] : m.target;
+      mm.fillStyle = '#ffea00';
+      mm.beginPath();
+      mm.arc((t[0] + 320) * scale, (t[1] + 320) * scale, 4, 0, Math.PI * 2);
+      mm.fill();
     }
     // police
-    if (H.police) {
-      ctx.fillStyle = '#2979ff';
-      for (const c of H.police.cruisers) {
-        ctx.beginPath(); ctx.arc(X(c.mesh.position.x), Z(c.mesh.position.z), big ? 5 : 3, 0, Math.PI * 2); ctx.fill();
-      }
-      ctx.fillStyle = '#ff1744';
-      for (const o of H.police.officers) {
-        ctx.beginPath(); ctx.arc(X(o.mesh.position.x), Z(o.mesh.position.z), big ? 4 : 2.5, 0, Math.PI * 2); ctx.fill();
-      }
-      if (H.police.heli) {
-        ctx.fillStyle = '#ffffff';
-        ctx.beginPath(); ctx.arc(X(H.police.heli.mesh.position.x), Z(H.police.heli.mesh.position.z), big ? 6 : 4, 0, Math.PI * 2); ctx.fill();
-      }
+    mm.fillStyle = '#3d5afe';
+    for (const c of police.cruisers) {
+      mm.beginPath();
+      mm.arc((c.x + 320) * scale, (c.z + 320) * scale, 3, 0, Math.PI * 2);
+      mm.fill();
+    }
+    // traffic
+    mm.fillStyle = 'rgba(255,255,255,0.7)';
+    for (const c of vehicles.traffic) {
+      mm.fillRect((c.x + 320) * scale - 1, (c.z + 320) * scale - 1, 2, 2);
     }
     // player arrow
-    ctx.save();
-    ctx.translate(X(S.px), Z(S.pz));
-    ctx.rotate(-S.heading + Math.PI);
-    ctx.fillStyle = '#ffffff';
-    ctx.beginPath();
-    ctx.moveTo(0, -8); ctx.lineTo(5, 6); ctx.lineTo(-5, 6); ctx.closePath();
-    ctx.fill();
-    ctx.restore();
+    const px = (S.px + 320) * scale;
+    const pz = (S.pz + 320) * scale;
+    mm.save();
+    mm.translate(px, pz);
+    mm.rotate(Math.atan2(Math.sin(S.heading), Math.cos(S.heading)));
+    mm.fillStyle = '#ff5252';
+    mm.beginPath();
+    mm.moveTo(0, -6);
+    mm.lineTo(4, 5);
+    mm.lineTo(-4, 5);
+    mm.closePath();
+    mm.fill();
+    mm.restore();
   }
 
-  function update(dt) {
-    const setText = (id, txt) => { const el = $(id); if (el) el.textContent = txt; };
-    setText('cash', '$' + Math.floor(S.cash).toLocaleString('en-US'));
-    setText('rank', S.rank);
-    setText('geckos', '🦎 ' + S.geckosGot + '/' + S.geckosTotal);
-    setText('radio', S.radioOn ? RADIO[S.station].name : 'RADIO OFF');
-    const w = WEAPONS[S.weaponIdx];
-    setText('weapon', w.name + '  ' + (w.mag === Infinity ? '∞' : S.ammo + ' / ' + S.reserve));
-    // wanted stars
-    const stars = $('stars');
-    if (stars) {
-      stars.textContent = '★'.repeat(S.wanted) + '☆'.repeat(Math.max(0, 5 - S.wanted));
-      stars.style.color = S.wanted >= 3 ? '#ff1744' : '#ffea00';
+  function update() {
+    if (els.cash) els.cash.textContent = '$' + S.cash;
+    if (els.rank) els.rank.textContent = S.rank;
+    const m = missions.current();
+    if (els.mission && m) {
+      els.mission.textContent = S.missionActive ? m.name.toUpperCase() : 'NEXT: ' + m.name.toUpperCase();
     }
-    // health / armour bars
-    const hb = $('health-bar');
-    if (hb) hb.style.width = Math.max(0, S.health) + '%';
-    const ab = $('armour-bar');
-    if (ab) ab.style.width = Math.max(0, S.armour) + '%';
-    setText('health-num', Math.ceil(S.health) + '');
-    // mission panel
-    const mp = $('mission-panel');
-    if (mp) {
-      if (S.missionIdx >= MISSIONS.length) {
-        mp.innerHTML = '<b>ALL 8 JOBS DONE</b><br>YOU ARE THE FIXER OF SOLARA';
-      } else if (S.missionActive) {
-        const m = MISSIONS[S.missionIdx];
-        const t = (m.type === 'finale' && S.missionStage === 1) ? m.stage1Target : m.target;
-        const d = Math.hypot(S.px - t[0], S.pz - t[1]);
-        const mm = Math.floor(Math.max(0, S.missionTime) / 60);
-        const ss = String(Math.floor(Math.max(0, S.missionTime) % 60)).padStart(2, '0');
-        const hold = (m.type === 'hold' || (m.type === 'finale' && S.missionStage === 0))
-          ? '  HOLD ' + S.missionHold.toFixed(1) + 's / 5s' : '';
-        mp.innerHTML = '<b>' + m.giver + ' — ' + m.name + '</b><br>' +
-          Math.round(d) + 'm &nbsp;·&nbsp; ' + mm + ':' + ss + hold;
+    if (els.missionDist && m) els.missionDist.textContent = Math.round(missions.distToTarget()) + 'm';
+    if (els.missionTimer) {
+      els.missionTimer.textContent = S.missionActive ? Math.max(0, Math.ceil(S.missionTime)) + 's' : '';
+    }
+    if (els.stars) {
+      els.stars.textContent = starText(S.wanted);
+      els.stars.style.color = S.wanted > 0 ? '#ff1744' : '#ffffff';
+    }
+    if (els.health) els.health.style.width = Math.max(0, S.health) + '%';
+    if (els.armour) els.armour.style.width = Math.max(0, S.armour) + '%';
+    const w = WEAPONS[S.weaponIdx];
+    if (els.ammo) els.ammo.textContent = w.name === 'FISTS' ? '∞' : S.ammo + ' / ' + S.reserve;
+    if (els.weapon) els.weapon.textContent = w.name;
+    if (els.message) {
+      els.message.textContent = S.time < S.messageUntil ? S.message : '';
+    }
+    const dlg = missions.getDialogue();
+    if (els.dialogue) {
+      if (dlg) {
+        els.dialogue.style.display = 'block';
+        if (els.dlgSpeaker) els.dlgSpeaker.textContent = dlg.speaker;
+        if (els.dlgText) els.dlgText.textContent = dlg.line;
       } else {
-        const m = MISSIONS[S.missionIdx];
-        mp.innerHTML = '<b>NEXT: ' + m.giver + ' — ' + m.name + '</b><br>Go to the yellow marker (E to start)';
+        els.dialogue.style.display = 'none';
       }
     }
-    // message fade
-    const msg = $('message');
-    if (msg && S.time > S.messageUntil) msg.style.opacity = '0';
-    // minimap
-    if (mctx) drawMinimap(mctx, 180, false);
-    const big = $('bigmap-canvas');
-    if (big && mapVisible) {
-      drawMinimap(big.getContext('2d'), 480, true);
+    if (els.geckos) els.geckos.textContent = '🦎 ' + world.geckosTaken() + '/20';
+    if (els.radio) els.radio.textContent = (S.radioOn ? '♪ ' : '♪ ✕ ') + RADIO[S.station % RADIO.length].name;
+    if (els.crew) {
+      const cds = Object.entries(S.crewCd).map(([k, v]) => k + (v > 0 ? ' ' + Math.ceil(v) + 's' : ' ✓')).join('  ');
+      els.crew.textContent = cds;
     }
-    // district label
-    const dl = $('district');
-    if (dl) {
-      const d = window.__solaraDistrict ? window.__solaraDistrict(S.px, S.pz) : null;
-      if (d) dl.textContent = d.name;
+    if (els.district) {
+      let best = null;
+      let bestD = 1e9;
+      for (const d of DISTRICTS) {
+        const dd = Math.hypot(S.px - d.x, S.pz - d.z);
+        if (dd < bestD) { bestD = dd; best = d; }
+      }
+      els.district.textContent = best ? best.name : '';
     }
+    drawMinimap();
   }
 
-  return H;
+  function showStart() { if (els.startScreen) els.startScreen.style.display = 'flex'; }
+  function hideStart() { if (els.startScreen) els.startScreen.style.display = 'none'; }
+  function showPause(b) { if (els.pauseScreen) els.pauseScreen.style.display = b ? 'flex' : 'none'; }
+  function showMap(b) { if (els.mapScreen) els.mapScreen.style.display = b ? 'flex' : 'none'; }
+
+  return { update, showStart, hideStart, showPause, showMap, drawMinimap };
 }
